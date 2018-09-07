@@ -121,9 +121,9 @@ class Watchdog:
         # Check each service
         # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
         services = os.popen("/kafka/bin/kafka-topics.sh --zookeeper {}:2181 --list".format(SWARM_MAN_IP)).readlines()
-        if "dtz.logging" not in services:
+        if "dtz.logging\n" not in services:
             status.append({"service": "kafka", "status": "Topic 'dtz.logging' not found"})
-        if "dtz.sensorthings" not in services:
+        if "dtz.sensorthings\n" not in services:
             status.append({"service": "kafka", "status": "Topic 'dtz.sensorthings' not found"})
         return status
 
@@ -153,7 +153,7 @@ class Watchdog:
     def check_mqtt_broker(self):
         status = list()
         # Check each service
-        services = os.popen("docker service ls | grep mqtt_").readlines()
+        services = os.popen("docker service ls | grep mqtt_mqtt-broker").readlines()
         if len(services) != 1:
             status.append({"service": "mqtt broker", "status": "Number of services is not 1."})
         for service in services:
