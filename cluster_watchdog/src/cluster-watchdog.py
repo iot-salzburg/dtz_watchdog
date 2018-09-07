@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import requests
 from redis import Redis
 from flask import Flask, jsonify
 from multiprocessing import Process
@@ -18,7 +19,7 @@ __desc__ = """This program watches the state of each service, part of the DTZ sy
 STATUS_FILE = "status.log"
 
 # Configuration:
-CLUSTER_IP = "192.168.48.81"
+SWARM_MAN_IP = "192.168.48.81"
 INTERVALL = 5 #* 60  # in seconds
 
 # webservice setup
@@ -54,13 +55,13 @@ class Watchdog:
         self.status["status"] = "running"
         while True:
             status = list()
+            status += self.check_kafka()
             status += self.check_datastack()
-            # status.append(check_sensorthings())
-            # status.append(check_kafka())
-            # status.append(check_operator_dashboard())
-            # status.append(check_mqtt_broker())
-            # status.append(check_mqtt_adapter())
-            # status.append(check_opc_adapter())
+            status += self.check_sensorthings()
+            status += self.check_operator_dashboard()
+            status += self.check_mqtt_broker()
+            status += self.check_mqtt_adapter()
+            # status += self.check_opc_adapter() TODO implement if opc adapter stands
             print(status)
 
             if status == list():
@@ -72,7 +73,6 @@ class Watchdog:
                 print(status)
             time.sleep(INTERVALL)
 
-
     def check_datastack(self):
         status = list()
         # Check each service
@@ -82,18 +82,134 @@ class Watchdog:
             status.append({"service": "datastack", "status": "Number of services is not 5."})
         for service in services:
             fields = [s for s in service.split(" ") if s != ""]
-            print(fields)
             id_ser = fields[0]
             name = fields[1]
             replicas = fields[3]
             image = fields[4]
-            print(replicas.split("/"))
             rep1, rep2 = replicas.split("/")
             if rep1 != rep2:
                 status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
                                "IMAGE": image})
-        print(status)
         return status
+
+    def check_sensorthings(self):
+        status = list()
+        # Check each service
+        services = os.popen("docker service ls | grep st_").readlines()
+        if len(services) != 3:
+            status.append({"service": "sensorthings", "status": "Number of services is not 3."})
+        for service in services:
+            fields = [s for s in service.split(" ") if s != ""]
+            id_ser = fields[0]
+            name = fields[1]
+            replicas = fields[3]
+            image = fields[4]
+            rep1, rep2 = replicas.split("/")
+            if rep1 != rep2:
+                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
+                               "IMAGE": image})
+
+        # Check connection:
+        req = requests.get(url="http://{}:8084".format(SWARM_MAN_IP))
+        if req.status_code != 200:
+            status.append({"service": "sensorthings", "status": "Service on port 8084 not reachable"})
+
+        return status
+
+    def check_kafka(self):
+        status = list()
+        # Check each service
+        # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
+        services = os.popen("/kafka/bin/kafka-topics.sh --zookeeper {}:2181 --list".format(SWARM_MAN_IP)).readlines()
+        if "dtz.logging" not in services:
+            status.append({"service": "kafka", "status": "Topic 'dtz.logging' not found"})
+        if "dtz.sensorthings" not in services:
+            status.append({"service": "kafka", "status": "Topic 'dtz.sensorthings' not found"})
+        return status
+
+    def check_operator_dashboard(self):
+        status = list()
+        # Check each service
+        services = os.popen("docker service ls | grep op_").readlines()
+        if len(services) != 2:
+            status.append({"service": "operator dashboard", "status": "Number of services is not 2."})
+        for service in services:
+            fields = [s for s in service.split(" ") if s != ""]
+            id_ser = fields[0]
+            name = fields[1]
+            replicas = fields[3]
+            image = fields[4]
+            rep1, rep2 = replicas.split("/")
+            if rep1 != rep2:
+                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
+                               "IMAGE": image})
+
+        # Check connection:
+        req = requests.get(url="http://{}:6789".format(SWARM_MAN_IP))
+        if req.status_code != 200:
+            status.append({"service": "operator dashboard", "status": "Service on port 6789 not reachable"})
+        return status
+
+    def check_mqtt_broker(self):
+        status = list()
+        # Check each service
+        services = os.popen("docker service ls | grep mqtt_").readlines()
+        if len(services) != 1:
+            status.append({"service": "mqtt broker", "status": "Number of services is not 1."})
+        for service in services:
+            fields = [s for s in service.split(" ") if s != ""]
+            id_ser = fields[0]
+            name = fields[1]
+            replicas = fields[3]
+            image = fields[4]
+            rep1, rep2 = replicas.split("/")
+            if rep1 != rep2:
+                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
+                               "IMAGE": image})
+        return status
+
+    def check_mqtt_adapter(self):
+        status = list()
+        # Check each service
+        services = os.popen("docker service ls | grep add-mqtt_").readlines()
+        if len(services) != 1:
+            status.append({"service": "mqtt adapter", "status": "Number of services is not 1."})
+        for service in services:
+            fields = [s for s in service.split(" ") if s != ""]
+            id_ser = fields[0]
+            name = fields[1]
+            replicas = fields[3]
+            image = fields[4]
+            rep1, rep2 = replicas.split("/")
+            if rep1 != rep2:
+                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
+                               "IMAGE": image})
+        return status
+
+    def check_db_adapter(self):
+        status = list()
+        # Check each service
+        services = os.popen("docker service ls | grep db-adapter_").readlines()
+        if len(services) != 2:
+            status.append({"service": "db adapter", "status": "Number of services is not 2."})
+        for service in services:
+            fields = [s for s in service.split(" ") if s != ""]
+            id_ser = fields[0]
+            name = fields[1]
+            replicas = fields[3]
+            image = fields[4]
+            rep1, rep2 = replicas.split("/")
+            if rep1 != rep2:
+                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
+                               "IMAGE": image})
+        # Check connection:
+        req = requests.get(url="http://{}:3030".format(SWARM_MAN_IP))
+        if req.status_code != 200:
+            status.append({"service": "db-adapter status", "status": "Service on port 3030 not reachable"})
+        elif req.json()["status"] != "running":
+            status.append({"service": "db-adapter status", "status": req.json()["status"]})
+        return status
+
 
 
 if __name__ == '__main__':
