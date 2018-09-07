@@ -23,7 +23,7 @@ pip3 install -r requirements.txt
 
 ### Cluster Watchdog
 ```bash
-python3 cluster_watchdog/cluster_watchdog.py
+python3 src/cluster_watchdog.py
 ```
 
 View if the cluster is healthy in the [browser](http://il081:8081/).
@@ -33,6 +33,13 @@ View if the cluster is healthy in the [browser](http://il081:8081/).
 
 Watchdog for the watchdog. If you are
 
+/srv/dtz_watchdog/cluster_watchdog
 
-### Restart when booting
 
+### Start when booting
+
+Add both scripts to the autostart script `~/.bashrc`:
+```
+python3 /path/to/dtz-watchdog/src/cluster_watchdog.py
+python3 /path/to/dtz-watchdog/src/meta_watchdog.py
+```
