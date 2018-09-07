@@ -59,6 +59,7 @@ class Watchdog:
         :return:
         """
         self.status["status"] = "running"
+        print("Started cluster watchdog")
         while True:
             status = list()
             status += self.check_kafka()
@@ -218,6 +219,7 @@ class Watchdog:
 
 
 if __name__ == '__main__':
+    print("Starting cluster-watchdog, initial waiting for some time")
     time.sleep(STARTUP_TIME)  # Give the other services time when rebooting.
     # start kafka to logstash streaming in a subprocess
     watchdog_instance = Watchdog()
