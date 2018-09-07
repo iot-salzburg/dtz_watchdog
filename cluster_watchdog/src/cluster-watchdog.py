@@ -34,11 +34,11 @@ def print_cluster_status():
     """
     try:
         with open(STATUS_FILE) as f:
-            adapter_status = json.loads(f.read())
+            status = json.loads(f.read())
     except FileNotFoundError:
-        adapter_status = {"application": "db-adapter",
-                          "status": "initialisation"}
-    return jsonify(adapter_status)
+        status = {"application": "db-adapter",
+                  "status": "running"}
+    return jsonify(status)
 
 
 class Watchdog:
@@ -51,6 +51,7 @@ class Watchdog:
 
 
     def start(self):
+        self.status["status"] = "running"
         while True:
             status = list()
             status += self.check_datastack()
@@ -61,10 +62,11 @@ class Watchdog:
             # status.append(check_mqtt_adapter())
             # status.append(check_opc_adapter())
             print(status)
-            sys.exit()
 
             if status == list():
-                self.status = "healthy"
+                self.status["cluster status"] = "healthy"
+            else:
+                self.status["cluster status"] = status
             with open(STATUS_FILE, "w") as f:
                 f.write(json.dumps(self.status))
                 print(status)
@@ -79,16 +81,18 @@ class Watchdog:
         if len(services) != 5:
             status.append({"service": "datastack", "status": "Number of services is not 5."})
         for service in services:
-            fields = service.split("\t")
+            fields = [s for s in service.split(" ") if s != ""]
+            print(fields)
             id_ser = fields[0]
             name = fields[1]
-            replicas = fields[2]
-            image = fields[3]
-
+            replicas = fields[3]
+            image = fields[4]
+            print(replicas.split("/"))
             rep1, rep2 = replicas.split("/")
             if rep1 != rep2:
                 status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
                                "IMAGE": image})
+        print(status)
         return status
 
 
