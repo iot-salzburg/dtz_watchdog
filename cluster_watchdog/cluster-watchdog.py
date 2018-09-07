@@ -17,10 +17,11 @@ __desc__ = """This program watches the state of each service, part of the DTZ sy
 
 
 STATUS_FILE = "status.log"
+# META_WATCHDOG_URL =
 
 # Configuration:
 SWARM_MAN_IP = "192.168.48.81"
-INTERVALL = 5 #* 60  # in seconds
+INTERVAL = 60  # in seconds
 
 # webservice setup
 app = Flask(__name__)
@@ -30,7 +31,7 @@ redis = Redis(host='redis', port=6379)
 @app.route('/')
 def print_cluster_status():
     """
-    This function is called by a sebserver request and prints the current meta information.
+    This function is called by a webserver request and prints the current cluster state
     :return:
     """
     try:
@@ -50,8 +51,11 @@ class Watchdog:
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
 
-
     def start(self):
+        """
+        Runs periodically healthchecks for each service and notifies via slack.
+        :return:
+        """
         self.status["status"] = "running"
         while True:
             status = list()
@@ -62,7 +66,7 @@ class Watchdog:
             status += self.check_mqtt_broker()
             status += self.check_mqtt_adapter()
             # status += self.check_opc_adapter() TODO implement if opc adapter stands
-            print(status)
+            # status += self.check_meta_watchdog() TODO deploy meta-watchdog and watch it too
 
             if status == list():
                 self.status["cluster status"] = "healthy"
@@ -71,7 +75,18 @@ class Watchdog:
             with open(STATUS_FILE, "w") as f:
                 f.write(json.dumps(self.status))
                 print(status)
-            time.sleep(INTERVALL)
+            time.sleep(INTERVAL)
+
+    def check_kafka(self):
+        status = list()
+        # Check each service
+        # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
+        services = os.popen("/kafka/bin/kafka-topics.sh --zookeeper {}:2181 --list".format(SWARM_MAN_IP)).readlines()
+        if "dtz.logging\n" not in services:
+            status.append({"service": "kafka", "status": "Topic 'dtz.logging' not found"})
+        if "dtz.sensorthings\n" not in services:
+            status.append({"service": "kafka", "status": "Topic 'dtz.sensorthings' not found"})
+        return status
 
     def check_datastack(self):
         status = list()
@@ -79,7 +94,7 @@ class Watchdog:
         # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
         services = os.popen("docker service ls | grep stack_").readlines()
         if len(services) != 5:
-            status.append({"service": "datastack", "status": "Number of services is not 5."})
+            status.append({"service": "datastack", "status": "Number of services is not 5.", "services": services})
         for service in services:
             fields = [s for s in service.split(" ") if s != ""]
             id_ser = fields[0]
@@ -97,7 +112,7 @@ class Watchdog:
         # Check each service
         services = os.popen("docker service ls | grep st_").readlines()
         if len(services) != 3:
-            status.append({"service": "sensorthings", "status": "Number of services is not 3."})
+            status.append({"service": "sensorthings", "status": "Number of services is not 3.", "services": services})
         for service in services:
             fields = [s for s in service.split(" ") if s != ""]
             id_ser = fields[0]
@@ -116,23 +131,12 @@ class Watchdog:
 
         return status
 
-    def check_kafka(self):
-        status = list()
-        # Check each service
-        # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
-        services = os.popen("/kafka/bin/kafka-topics.sh --zookeeper {}:2181 --list".format(SWARM_MAN_IP)).readlines()
-        if "dtz.logging\n" not in services:
-            status.append({"service": "kafka", "status": "Topic 'dtz.logging' not found"})
-        if "dtz.sensorthings\n" not in services:
-            status.append({"service": "kafka", "status": "Topic 'dtz.sensorthings' not found"})
-        return status
-
     def check_operator_dashboard(self):
         status = list()
         # Check each service
         services = os.popen("docker service ls | grep op_").readlines()
         if len(services) != 2:
-            status.append({"service": "operator dashboard", "status": "Number of services is not 2."})
+            status.append({"service": "operator dashboard", "status": "Number of services is not 2.", "services": services})
         for service in services:
             fields = [s for s in service.split(" ") if s != ""]
             id_ser = fields[0]
@@ -155,7 +159,7 @@ class Watchdog:
         # Check each service
         services = os.popen("docker service ls | grep mqtt_mqtt-broker").readlines()
         if len(services) != 1:
-            status.append({"service": "mqtt broker", "status": "Number of services is not 1."})
+            status.append({"service": "mqtt broker", "status": "Number of services is not 1.", "services": services})
         for service in services:
             fields = [s for s in service.split(" ") if s != ""]
             id_ser = fields[0]
@@ -173,7 +177,7 @@ class Watchdog:
         # Check each service
         services = os.popen("docker service ls | grep add-mqtt_").readlines()
         if len(services) != 1:
-            status.append({"service": "mqtt adapter", "status": "Number of services is not 1."})
+            status.append({"service": "mqtt adapter", "status": "Number of services is not 1.", "services": services})
         for service in services:
             fields = [s for s in service.split(" ") if s != ""]
             id_ser = fields[0]
@@ -191,7 +195,7 @@ class Watchdog:
         # Check each service
         services = os.popen("docker service ls | grep db-adapter_").readlines()
         if len(services) != 2:
-            status.append({"service": "db adapter", "status": "Number of services is not 2."})
+            status.append({"service": "db adapter", "status": "Number of services is not 2.", "services": services})
         for service in services:
             fields = [s for s in service.split(" ") if s != ""]
             id_ser = fields[0]
@@ -209,7 +213,6 @@ class Watchdog:
         elif req.json()["status"] != "running":
             status.append({"service": "db-adapter status", "status": req.json()["status"]})
         return status
-
 
 
 if __name__ == '__main__':
