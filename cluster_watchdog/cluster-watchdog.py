@@ -22,6 +22,8 @@ STATUS_FILE = "status.log"
 # Configuration:
 SWARM_MAN_IP = "192.168.48.81"
 INTERVAL = 60  # in seconds
+STARTUP_TIME = 120
+
 
 # webservice setup
 app = Flask(__name__)
@@ -216,6 +218,7 @@ class Watchdog:
 
 
 if __name__ == '__main__':
+    time.sleep(STARTUP_TIME)  # Give the other services time when rebooting.
     # start kafka to logstash streaming in a subprocess
     watchdog_instance = Watchdog()
     watchdog_routine = Process(target=Watchdog.start, args=(watchdog_instance,))

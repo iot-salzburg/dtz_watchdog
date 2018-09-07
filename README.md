@@ -32,3 +32,7 @@ View if the cluster is healthy in the [browser](http://il081:8081/).
 ### Meta Watchdog
 
 Watchdog for the watchdog. If you are
+
+
+### Restart when booting
+
