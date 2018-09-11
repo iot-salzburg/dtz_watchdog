@@ -8,8 +8,8 @@ via Slack. Additionally, a second watchdog watches the main one.
 
 1. [Requirements](#requirements)
 2. [Usage](#usage)
-3. [Configuration](#configuration)
-4. [Trouble-Shooting](#Trouble-shooting)
+
+
 
 ## Requirements
 
@@ -18,6 +18,8 @@ git clone https://github.com/iot-salzburg/dtz_watchdog.git
 cd dtz-watchdog/
 pip3 install -r requirements.txt
 ```
+
+
 
 ## Usage
 
@@ -36,8 +38,6 @@ echo $SLACK_URL
 Now, the Watchdog can be started.
 
 ```bash
-git clone https://github.com/iot-salzburg/dtz_watchdog.git
-cd dtz_watchdog
 python3 src/cluster_watchdog.py
 ```
 
@@ -75,9 +75,3 @@ sudo systemctl start cluster-watchdog.service
 sudo systemctl status cluster-watchdog.service
 ```
 
-
-### Meta Watchdog
-
-Watchdog for the watchdog. If you are
-
-/srv/dtz_watchdog/cluster_watchdog
