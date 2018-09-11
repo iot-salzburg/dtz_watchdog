@@ -60,7 +60,7 @@ After=network.target
 [Service]
 User=iotdev
 Group=iotdev
-Environment=SLACK_URL=https://hooks.slack.com/services/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
+Environment=SLACK_URL=https://hooks.slack.com/services/id1/id2/id3
 WorkingDirectory=/srv/dtz_watchdog/
 ExecStart=/srv/dtz_watchdog/src/cluster-watchdog.py
 ExecReload=/bin/kill -HUP $MAINPID
