@@ -1,5 +1,4 @@
-#!//usr/bin/env python3
-
+#!/usr/bin/env python3
 import os
 import sys
 import json
@@ -57,16 +56,16 @@ class Watchdog:
                             "version": {"number": __version__, "build_date": __date__,
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
+        self.slack = slackweb.Slack(url=os.getenv('SLACK_URL'))
+        if socket.gethostname().startswith("il08"):
+            self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
+
 
     def start(self):
         """
         Runs periodically healthchecks for each service and notifies via slack.
         :return:
         """
-        self.slack = slackweb.Slack(url=os.getenv('SLACK_URL'))
-        if socket.gethostname().startswith("il08"):
-            self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
-
         self.status["status"] = "running"
         print("Started cluster watchdog")
         c = NOTIFY_TIME
@@ -230,8 +229,9 @@ class Watchdog:
 
     def slack_notify(self,counter, attachments):
         if counter >= NOTIFY_TIME:
+            self.slack.notify(text="Testing messenger")
             if socket.gethostname().startswith("il08"):  # true on cluster node il081
-                self.slack.notify(attachments=json.dumps({"attachments": attachments}, indent=4, sort_keys=True))
+                self.slack.notify(attachments=str(attachments))
             else:
                 print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
             counter = 0
