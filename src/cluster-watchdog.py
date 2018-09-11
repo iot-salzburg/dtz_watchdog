@@ -2,7 +2,9 @@ import os
 import sys
 import json
 import time
+import socket
 import requests
+import slackweb
 from redis import Redis
 from flask import Flask, jsonify
 from multiprocessing import Process
@@ -22,7 +24,8 @@ STATUS_FILE = "status.log"
 # Configuration:
 SWARM_MAN_IP = "192.168.48.81"
 INTERVAL = 60  # in seconds
-STARTUP_TIME = 120
+STARTUP_TIME = 0 #120
+NOTIFY_TIME=10*60
 
 
 # webservice setup
@@ -58,8 +61,13 @@ class Watchdog:
         Runs periodically healthchecks for each service and notifies via slack.
         :return:
         """
+        self.slack = slackweb.Slack(url=os.getenv('SLACK_URL'))
+        if socket.gethostname().startswith("il08"):
+            self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
+
         self.status["status"] = "running"
         print("Started cluster watchdog")
+        c = NOTIFY_TIME
         while True:
             status = list()
             status += self.check_kafka()
@@ -73,11 +81,12 @@ class Watchdog:
 
             if status == list():
                 self.status["cluster status"] = "healthy"
+                c = NOTIFY_TIME
             else:
                 self.status["cluster status"] = status
+                c = self.slack_notify(c, attachments=[{'title': 'Datastack Warning', 'text': status, 'color': 'warning'}])
             with open(STATUS_FILE, "w") as f:
                 f.write(json.dumps(self.status))
-                print(status)
             time.sleep(INTERVAL)
 
     def check_kafka(self):
@@ -216,6 +225,17 @@ class Watchdog:
         elif req.json()["status"] != "running":
             status.append({"service": "db-adapter status", "status": req.json()["status"]})
         return status
+
+    def slack_notify(self,counter, attachments):
+        if counter >= NOTIFY_TIME:
+            if socket.gethostname().startswith("il08"):  # true on cluster node il081
+                self.slack.notify(attachments=json.dumps({"attachments": attachments}, indent=4, sort_keys=True))
+            else:
+                print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
+            counter = 0
+        else:
+            counter += INTERVAL
+        return counter
 
 
 if __name__ == '__main__':
