@@ -26,6 +26,7 @@ SLACK_URL =  os.environ.get('SLACK_URL')
 SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
 INTERVAL = 20  # in seconds
 STARTUP_TIME = 0  # for other services
+REACTION_TIME = 2*60  # Timeout in order to not notify when rebooting
 NOTIFY_TIME = 60*60
 
 # webservice setup
@@ -99,7 +100,7 @@ class Watchdog:
         return list()
 
     def slack_notify(self, counter, attachments):
-        if counter >= NOTIFY_TIME:
+        if counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
             print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
             self.slack.notify(attachments=attachments)
