@@ -18,14 +18,14 @@ __status__ = "Development"
 __desc__ = """This program watches the state of the cluster-watchdog, part of the DTZ system on the il08X cluster."""
 
 
-STATUS_FILE = "meat_status.log"
+STATUS_FILE = "meta_status.log"
 
 # Configuration:
-SWARM_MAN_IP = "192.168.48.81"
-INTERVAL = 60  # in seconds
+print(os.environ.get('SWARM_MAN_IP'))
+SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
+INTERVAL = 20  # in seconds
 STARTUP_TIME = 0  # for other services
 NOTIFY_TIME = 60*60
-
 
 # webservice setup
 app = Flask(__name__)

@@ -72,7 +72,42 @@ WantedBy=multi-user.target
 An run to enable:
 ```
 sudo systemctl enable cluster-watchdog.service
-sudo systemctl start cluster-watchdog.service
-sudo systemctl status cluster-watchdog.service
+sudo systemctl start cluster-watchdog
+sudo systemctl status cluster-watchdog
 ```
 
+
+### Meta Watchdog Deployment
+
+As there would be no notifications if the host server itself crashes,
+we deploy a meta watchdog, that watches only on the cluster watchdog.
+
+Therefore, Select on another host:
+
+Create a service with `systemd`:
+```
+sudo nano /etc/systemd/system/meta-watchdog.service
+```
+With the content:
+```
+[Unit]
+Description=Autostart DTZ Meta Watchdog
+After=network.target
+
+[Service]
+User=iotdev
+Group=iotdev
+Environment=SLACK_URL=https://hooks.slack.com/services/id1/id2/id3
+WorkingDirectory=/srv/dtz_watchdog/
+ExecStart=/srv/dtz_watchdog/src/meta-watchdog.py
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+```
+An run to enable:
+```
+sudo systemctl enable meta-watchdog.service
+sudo systemctl start meta-watchdog
+sudo systemctl status meta-watchdog
+```
