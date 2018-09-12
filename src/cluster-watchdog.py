@@ -11,18 +11,19 @@ from flask import Flask, jsonify
 from multiprocessing import Process
 
 
-__date__ = "11 September 2018"
-__version__ = "1.1"
+__date__ = "12 September 2018"
+__version__ = "1.2"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
 __desc__ = """This program watches the state of each service, part of the DTZ system on the il08X cluster."""
 
 
 STATUS_FILE = "status.log"
-META_WATCHDOG_URL = "192.168.48.50"
+SLACK_URL =  os.environ.get('SLACK_URL')
 
-# Configuration:
-SWARM_MAN_IP = "192.168.48.81"
+#Configuration
+META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
+SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
 INTERVAL = 60  # in seconds
 STARTUP_TIME = 120  # for other services
 NOTIFY_TIME = 60*60
@@ -50,15 +51,20 @@ def print_cluster_status():
 
 class Watchdog:
     def __init__(self):
-        self.status = dict({"application": "dtz_cluster-watchdog",
+        self.status = dict({"application": "dtz_meta-watchdog",
                             "status": "initialisation",
+                            "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP, "META_WATCHDOG_URL": META_WATCHDOG_URL,
+                                                      "SLACK_URL": SLACK_URL[:33]+"..."},
                             "version": {"number": __version__, "build_date": __date__,
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
-        self.slack = slackweb.Slack(url=os.environ.get('SLACK_URL'))
+        self.slack = slackweb.Slack(url=SLACK_URL)  # os.environ.get('SLACK_URL'))
         # If that fails, examine if the env variable is set correctly.
+        with open(STATUS_FILE, "w") as f:
+            f.write(json.dumps(self.status))
         # print(os.environ.get('SLACK_URL'))
-        if socket.gethostname().startswith("il08"):
+
+        if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # If this is run by the host.
             self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
 
     def start(self):
@@ -244,7 +250,7 @@ class Watchdog:
     def slack_notify(self,counter, attachments):
         if counter >= NOTIFY_TIME:
             # self.slack.notify(text="Testing messenger")
-            if socket.gethostname().startswith("il08"):  # true on cluster node il081
+            if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # true on cluster node il081
                 self.slack.notify(attachments=attachments)
             else:
                 print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
