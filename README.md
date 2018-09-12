@@ -15,7 +15,7 @@ via Slack. Additionally, a second watchdog watches the main one.
 
 ```bash
 git clone https://github.com/iot-salzburg/dtz_watchdog.git
-cd dtz-watchdog/
+cd dtz_watchdog
 pip3 install -r requirements.txt
 ```
 
@@ -28,10 +28,11 @@ pip3 install -r requirements.txt
 The Watchdog uses a slack webhook to notify about cluster issues. Therefore open in Slack a new channel, then `add app`,
 look for `Incoming WebHooks`, `Add Configuration` and select the desired Slack Channel. Then a new configuration will
 show the WebHook-Url in the form: `https://hooks.slack.com/services/id1/id2/id3`. This URL should be set as
-environment variable on the host.
+environment variable on the host. Note that the **url is in quotes**, so that
+it can be accessed within python.
 
 ```bash
-export SLACK_URL=https://hooks.slack.com/services/id1/id2/id3
+export SLACK_URL="https://hooks.slack.com/services/id1/id2/id3"
 echo $SLACK_URL
 ```
 

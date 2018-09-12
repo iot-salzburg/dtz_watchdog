@@ -11,7 +11,7 @@ from flask import Flask, jsonify
 from multiprocessing import Process
 
 
-__date__ = "11 September 2018"
+__date__ = "12 September 2018"
 __version__ = "1.1"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
