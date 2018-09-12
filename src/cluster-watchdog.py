@@ -19,13 +19,13 @@ __desc__ = """This program watches the state of each service, part of the DTZ sy
 
 
 STATUS_FILE = "status.log"
-# META_WATCHDOG_URL =
+META_WATCHDOG_URL = "192.168.48.50"
 
 # Configuration:
 SWARM_MAN_IP = "192.168.48.81"
 INTERVAL = 60  # in seconds
 STARTUP_TIME = 120  # for other services
-NOTIFY_TIME=60*60
+NOTIFY_TIME = 60*60
 
 
 # webservice setup
@@ -43,14 +43,14 @@ def print_cluster_status():
         with open(STATUS_FILE) as f:
             status = json.loads(f.read())
     except FileNotFoundError:
-        status = {"application": "db-adapter",
+        status = {"application": "dtz_cluster-watchdog",
                   "status": "running"}
     return jsonify(status)
 
 
 class Watchdog:
     def __init__(self):
-        self.status = dict({"application": "db-adapter",
+        self.status = dict({"application": "dtz_cluster-watchdog",
                             "status": "initialisation",
                             "version": {"number": __version__, "build_date": __date__,
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
@@ -69,7 +69,6 @@ class Watchdog:
         time.sleep(STARTUP_TIME)  # Give the other services time when rebooting.
 
         self.status["status"] = "running"
-        print("Started cluster watchdog")
         c = NOTIFY_TIME
         while True:
             status = list()
@@ -80,7 +79,7 @@ class Watchdog:
             status += self.check_mqtt_broker()
             status += self.check_mqtt_adapter()
             # status += self.check_opc_adapter() TODO implement if opc adapter stands
-            # status += self.check_meta_watchdog() TODO deploy meta-watchdog and watch it too
+            status += self.check_meta_watchdog()
 
             if status == list():
                 self.status["cluster status"] = "healthy"
@@ -229,6 +228,18 @@ class Watchdog:
         elif req.json()["status"] != "running":
             status.append({"service": "db-adapter status", "status": req.json()["status"]})
         return status
+
+    def check_meta_watchdog(self):
+        # Check connection:
+        try:
+            req = requests.get(url="http://{}:8081".format(META_WATCHDOG_URL))
+            if req.status_code != 200:
+                return [{"service": "meta watchdog", "status": "Service on {}:8081 not reachable".format(META_WATCHDOG_URL)}]
+        except requests.exceptions.ConnectionError:
+            return [
+                {"service": "meta watchdog", "status": "Service on {}:8081 not reachable".format(META_WATCHDOG_URL)}]
+        return list()
+
 
     def slack_notify(self,counter, attachments):
         if counter >= NOTIFY_TIME:
