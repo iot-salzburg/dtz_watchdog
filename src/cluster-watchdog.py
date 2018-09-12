@@ -17,11 +17,9 @@ __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
 __desc__ = """This program watches the state of each service, part of the DTZ system on the il08X cluster."""
 
-
+# Configuration
 STATUS_FILE = "status.log"
-SLACK_URL =  os.environ.get('SLACK_URL')
-
-#Configuration
+SLACK_URL = os.environ.get('SLACK_URL')
 META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
 SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
 INTERVAL = 60  # in seconds
