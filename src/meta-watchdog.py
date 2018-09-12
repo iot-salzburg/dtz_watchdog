@@ -18,8 +18,7 @@ __status__ = "Development"
 __desc__ = """This program watches the state of the cluster-watchdog, part of the DTZ system on the il08X cluster."""
 
 
-STATUS_FILE = "status.log"
-# META_WATCHDOG_URL =
+STATUS_FILE = "meat_status.log"
 
 # Configuration:
 SWARM_MAN_IP = "192.168.48.81"
@@ -44,7 +43,7 @@ def print_cluster_status():
             status = json.loads(f.read())
     except FileNotFoundError:
         status = {"application": "dtz_meta-watchdog",
-                  "status": "running"}
+                  "status": "init"}
     return jsonify(status)
 
 
