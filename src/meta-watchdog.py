@@ -18,15 +18,15 @@ __status__ = "Development"
 __desc__ = """This program watches the state of the cluster-watchdog, part of the DTZ system on the il08X cluster."""
 
 
-STATUS_FILE = "status.log"
-# META_WATCHDOG_URL =
+STATUS_FILE = "meta_status.log"
+SLACK_URL =  os.environ.get('SLACK_URL')
 
 # Configuration:
-SWARM_MAN_IP = "192.168.48.81"
-INTERVAL = 60  # in seconds
+# print(os.environ.get('SWARM_MAN_IP'))
+SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
+INTERVAL = 20  # in seconds
 STARTUP_TIME = 0  # for other services
 NOTIFY_TIME = 60*60
-
 
 # webservice setup
 app = Flask(__name__)
@@ -44,7 +44,7 @@ def print_cluster_status():
             status = json.loads(f.read())
     except FileNotFoundError:
         status = {"application": "dtz_meta-watchdog",
-                  "status": "running"}
+                  "status": "init"}
     return jsonify(status)
 
 
@@ -52,12 +52,15 @@ class Watchdog:
     def __init__(self):
         self.status = dict({"application": "dtz_meta-watchdog",
                             "status": "initialisation",
+                            "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP, "SLACK_URL": SLACK_URL[:33]+"..."},
                             "version": {"number": __version__, "build_date": __date__,
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
-        self.slack = slackweb.Slack(url=os.environ.get('SLACK_URL'))
+        self.slack = slackweb.Slack(url=SLACK_URL)  # os.environ.get('SLACK_URL'))
         # If that fails, examine if the env variable is set correctly.
-        print(os.environ.get('SLACK_URL'))
+        with open(STATUS_FILE, "w") as f:
+            f.write(json.dumps(self.status))
+        # print(os.environ.get('SLACK_URL'))
         self.slack.notify(text='Started meta-watchdog on host {}'.format(socket.gethostname()))
 
     def start(self):
@@ -78,7 +81,7 @@ class Watchdog:
                 c = NOTIFY_TIME
             else:
                 self.status["cluster status"] = status
-                c = self.slack_notify(c, attachments=[{'title': 'Watchdog Warning',
+                c = self.slack_notify(c, attachments=[{'title': 'Meta-Watchdog Warning',
                                                        'text': str(json.dumps(status, indent=4)),
                                                        'color': 'warning'}])
             with open(STATUS_FILE, "w") as f:
