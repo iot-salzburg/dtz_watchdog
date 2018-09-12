@@ -24,6 +24,7 @@ META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
 SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
 INTERVAL = 60  # in seconds
 STARTUP_TIME = 120  # for other services
+REACTION_TIME = 2*60  # Timeout in order to not notify when rebooting
 NOTIFY_TIME = 60*60
 
 
@@ -246,7 +247,7 @@ class Watchdog:
 
 
     def slack_notify(self,counter, attachments):
-        if counter >= NOTIFY_TIME:
+        if counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
             if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # true on cluster node il081
                 self.slack.notify(attachments=attachments)
