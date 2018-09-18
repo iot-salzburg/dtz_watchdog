@@ -44,13 +44,13 @@ def print_cluster_status():
             status = json.loads(f.read())
     except FileNotFoundError:
         status = {"application": "dtz_cluster-watchdog",
-                  "status": "running"}
+                  "status": "FileNotFoundError"}
     return jsonify(status)
 
 
 class Watchdog:
     def __init__(self):
-        self.status = dict({"application": "dtz_meta-watchdog",
+        self.status = dict({"application": "dtz_cluster-watchdog",
                             "status": "initialisation",
                             "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP, "META_WATCHDOG_URL": META_WATCHDOG_URL,
                                                       "SLACK_URL": SLACK_URL[:33]+"..."},
@@ -83,6 +83,7 @@ class Watchdog:
             status += self.check_operator_dashboard()
             status += self.check_mqtt_broker()
             status += self.check_mqtt_adapter()
+            status += self.check_db_adapter()
             # status += self.check_opc_adapter() TODO implement if opc adapter stands
             status += self.check_meta_watchdog()
 
@@ -143,12 +144,15 @@ class Watchdog:
             if rep1 != rep2:
                 status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
                                "IMAGE": image})
-
         # Check connection:
-        req = requests.get(url="http://{}:8084".format(SWARM_MAN_IP))
-        if req.status_code != 200:
-            status.append({"service": "sensorthings", "status": "Service on port 8084 not reachable"})
-
+        try:
+            req = requests.get(url="http://{}:8084/v1.0/Things".format(SWARM_MAN_IP))
+            if req.status_code != 200:
+                status.append({"service": "sensorthings", "status": "Service on port 8084 not reachable"})
+            if "value" not in req.json().keys():
+                status.append({"service": "sensorthings", "status": "No content found in http://{}:8084/v1.0/Things"})
+        except requests.exceptions.ConnectionError:
+            status.append({"service": "sensorthings", "status": "Connection refused"})
         return status
 
     def check_operator_dashboard(self):
@@ -167,11 +171,13 @@ class Watchdog:
             if rep1 != rep2:
                 status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
                                "IMAGE": image})
-
         # Check connection:
-        req = requests.get(url="http://{}:6789".format(SWARM_MAN_IP))
-        if req.status_code != 200:
-            status.append({"service": "operator dashboard", "status": "Service on port 6789 not reachable"})
+        try:
+            req = requests.get(url="http://{}:6789".format(SWARM_MAN_IP))
+            if req.status_code != 200:
+                status.append({"service": "operator dashboard", "status": "Service on port 6789 not reachable"})
+        except requests.exceptions.ConnectionError:
+            status.append({"service": "operator dashboard", "status": "Service on port 6789, connection refused"})
         return status
 
     def check_mqtt_broker(self):
@@ -227,11 +233,14 @@ class Watchdog:
                 status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
                                "IMAGE": image})
         # Check connection:
-        req = requests.get(url="http://{}:3030".format(SWARM_MAN_IP))
-        if req.status_code != 200:
-            status.append({"service": "db-adapter status", "status": "Service on port 3030 not reachable"})
-        elif req.json()["status"] != "running":
-            status.append({"service": "db-adapter status", "status": req.json()["status"]})
+        try:
+            req = requests.get(url="http://{}:3030".format(SWARM_MAN_IP))
+            if req.status_code != 200:
+                status.append({"service": "db-adapter status", "status": "Service on port 3030 not reachable"})
+            elif req.json()["status"] != "running":
+                status.append({"service": "db-adapter status", "status": req.json()["status"]})
+        except requests.exceptions.ConnectionError:
+            status.append({"service": "db-adapter status", "status": "Connection refused"})
         return status
 
     def check_meta_watchdog(self):
@@ -246,7 +255,7 @@ class Watchdog:
         return list()
 
 
-    def slack_notify(self,counter, attachments):
+    def slack_notify(self, counter, attachments):
         if counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
             if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # true on cluster node il081
