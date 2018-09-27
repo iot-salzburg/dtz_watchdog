@@ -63,8 +63,10 @@ class Watchdog:
             f.write(json.dumps(self.status))
         # print(os.environ.get('SLACK_URL'))
 
-        if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # If this is run by the host.
-            self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
+        #if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # If this is run by the host.
+        print("'Started Cluster watchdog on host {}'.format(socket.gethostname()))
+        self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
+
 
     def start(self):
         """
@@ -258,10 +260,11 @@ class Watchdog:
     def slack_notify(self, counter, attachments):
         if counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
-            if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # true on cluster node il081
-                self.slack.notify(attachments=attachments)
-            else:
-                print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
+            #if socket.gethostname().startswith(SWARM_MAN_IP[:13]):  # true on cluster node 192.168.48.81
+            print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
+            self.slack.notify(attachments=attachments)
+            #else:
+            #    print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
             counter = 0
         else:
             counter += INTERVAL
