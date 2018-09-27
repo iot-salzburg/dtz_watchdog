@@ -64,7 +64,7 @@ class Watchdog:
         # print(os.environ.get('SLACK_URL'))
 
         #if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # If this is run by the host.
-        print("'Started Cluster watchdog on host {}'.format(socket.gethostname()))
+        print('Started Cluster watchdog on host {}'.format(socket.gethostname()))
         self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
 
 
