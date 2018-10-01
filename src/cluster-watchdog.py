@@ -6,12 +6,14 @@ import time
 import socket
 import requests
 import slackweb
+import pytz
+from datetime import datetime
 from redis import Redis
 from flask import Flask, jsonify
 from multiprocessing import Process
 
 
-__date__ = "27 September 2018"
+__date__ = "1 October 2018"
 __version__ = "1.3"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
@@ -52,6 +54,7 @@ class Watchdog:
     def __init__(self):
         self.status = dict({"application": "dtz_cluster-watchdog",
                             "status": "initialisation",
+                            "last check": datetime.utcnow().replace(tzinfo=pytz.UTC).isoformat(),
                             "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP, "META_WATCHDOG_URL": META_WATCHDOG_URL,
                                                       "SLACK_URL": SLACK_URL[:33]+"..."},
                             "version": {"number": __version__, "build_date": __date__,
@@ -96,6 +99,7 @@ class Watchdog:
                 self.status["cluster status"] = status
                 c = self.slack_notify(c, attachments=[{'title': 'Datastack Warning', 'text': str(json.dumps(status, indent=4)), 'color': 'warning'}])
                 #c = self.slack_notify(c, attachments=[{'title': 'Datastack Warning', 'text': str(status), 'color': 'warning'}])
+            self.status["last check"] = datetime.utcnow().replace(tzinfo=pytz.UTC).isoformat()
             with open(STATUS_FILE, "w") as f:
                 f.write(json.dumps(self.status))
             time.sleep(INTERVAL)
