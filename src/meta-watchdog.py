@@ -11,11 +11,11 @@ from flask import Flask, jsonify
 from multiprocessing import Process
 
 
-__date__ = "12 September 2018"
+__date__ = "14 Juni 2019"
 __version__ = "1.1"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
-__desc__ = """This program watches the state of the cluster-watchdog, part of the DTZ system on the il08X cluster."""
+__desc__ = """This program watches the state of the cluster-watchdog, part of the DTZ system on the il07X cluster."""
 
 
 STATUS_FILE = "meta_status.log"
@@ -23,7 +23,7 @@ SLACK_URL =  os.environ.get('SLACK_URL')
 
 # Configuration:
 # print(os.environ.get('SWARM_MAN_IP'))
-SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
+SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.71")
 INTERVAL = 20  # in seconds
 STARTUP_TIME = 0  # for other services
 REACTION_TIME = 2*60  # Timeout in order to not notify when rebooting

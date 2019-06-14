@@ -4,29 +4,77 @@ import sys
 import json
 import time
 import socket
+import logging
 import requests
 import slackweb
 from redis import Redis
 from flask import Flask, jsonify
 from multiprocessing import Process
 
-
-__date__ = "12 September 2018"
+__date__ = "14 Juni 2019"
 __version__ = "1.2"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
-__desc__ = """This program watches the state of each service, part of the DTZ system on the il08X cluster."""
+__desc__ = """This program watches the state of each service, part of the DTZ system on the il07X cluster.
+The following services will be watched:
+- Zookeeper on il071, il072, il073
+- Kafka on il071, il072, il073, il074, il075
+- Swarm Services:
+  - add-datastore_datastore-adapter
+  - add-mqtt_adapter
+  - add-opcua_adapter
+  - dtz_master_controller_dtz_master_controller
+  - elk_elasticsearch
+  - elk_grafana
+  - elk_kibana
+  - elk_logstash
+  - gost_dashboard
+  - gost_gost
+  - gost_gost-db
+  - hololens-adapter_adapter
+  - mqtt_mqtt-broker
+  - registry
+  - visualizer_visualizer"""
 
 # Configuration
 STATUS_FILE = "status.log"
-SLACK_URL = os.environ.get('SLACK_URL')
+SLACK_URL = os.environ.get('SLACK_URL', "")
+if SLACK_URL == "":
+    print("No Slack URL found")
 META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
-SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.81")
+SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.71")
 INTERVAL = 60  # in seconds
-STARTUP_TIME = 120  # for other services
-REACTION_TIME = 2*60  # Timeout in order to not notify when rebooting
-NOTIFY_TIME = 60*60
+STARTUP_TIME = 0  # 120  # for other services
+REACTION_TIME = 2 * 60  # Timeout in order to not notify when rebooting
+NOTIFY_TIME = 60 * 60
 
+services = [
+    "zookeeper 192.168.48.71:2181",
+    "zookeeper 192.168.48.72:2181",
+    "zookeeper 192.168.48.73:2181",
+    "kafka 192.168.48.71:9092",
+    "kafka 192.168.48.72:9092",
+    "kafka 192.168.48.73:9092",
+    "kafka 192.168.48.74:9092",
+    "kafka 192.168.48.75:9092",
+    "add-datastore_datastore-adapter",
+    "add-mqtt_adapter",
+    "add-opcua_adapter",
+    "dtz_master_controller_dtz_master_controller",
+    "elk_elasticsearch",
+    "elk_grafana",
+    "elk_kibana",
+    "elk_logstash",
+    "gost_dashboard",
+    "gost_gost",
+    "gost_gost-db",
+    "hololens-adapter_adapter",
+    "mqtt_mqtt-broker",
+    "registry",
+    "visualizer_visualizer",
+
+    "meta watchdog"
+]
 
 # webservice setup
 app = Flask(__name__)
@@ -50,21 +98,24 @@ def print_cluster_status():
 
 class Watchdog:
     def __init__(self):
-        self.status = dict({"application": "dtz_meta-watchdog",
+        self.status = dict({"application": "dtz_cluster-watchdog",
                             "status": "initialisation",
-                            "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP, "META_WATCHDOG_URL": META_WATCHDOG_URL,
-                                                      "SLACK_URL": SLACK_URL[:33]+"..."},
-                            "version": {"number": __version__, "build_date": __date__,
+                            "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP,
+                                                      "META_WATCHDOG_URL": META_WATCHDOG_URL,
+                                                      "SLACK_URL": SLACK_URL[:33] + "..."},
+                            "version": {"number": __version__,
+                                        "build_date": __date__,
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
+
         self.slack = slackweb.Slack(url=SLACK_URL)  # os.environ.get('SLACK_URL'))
         # If that fails, examine if the env variable is set correctly.
         with open(STATUS_FILE, "w") as f:
             f.write(json.dumps(self.status))
-        # print(os.environ.get('SLACK_URL'))
 
         if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # If this is run by the host.
-            self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
+            # self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
+            pass
 
     def start(self):
         """
@@ -75,15 +126,12 @@ class Watchdog:
 
         self.status["status"] = "running"
         c = NOTIFY_TIME
+        self.service_status = {k: True for k in services}
+
         while True:
             status = list()
             status += self.check_kafka()
-            status += self.check_datastack()
-            status += self.check_sensorthings()
-            status += self.check_operator_dashboard()
-            status += self.check_mqtt_broker()
-            status += self.check_mqtt_adapter()
-            # status += self.check_opc_adapter() TODO implement if opc adapter stands
+            status += self.check_docker_services()
             status += self.check_meta_watchdog()
 
             if status == list():
@@ -91,147 +139,75 @@ class Watchdog:
                 c = NOTIFY_TIME
             else:
                 self.status["cluster status"] = status
-                c = self.slack_notify(c, attachments=[{'title': 'Datastack Warning', 'text': str(json.dumps(status, indent=4)), 'color': 'warning'}])
-                #c = self.slack_notify(c, attachments=[{'title': 'Datastack Warning', 'text': str(status), 'color': 'warning'}])
+                self.slack_notify(c, attachments=[
+                    {'title': 'Datastack Warning', 'text': str(json.dumps(status, indent=4)), 'color': 'warning'}])
+                self.slack_notify(c,
+                                  attachments=[{'title': 'Datastack Warning', 'text': str(status), 'color': 'warning'}])
             with open(STATUS_FILE, "w") as f:
                 f.write(json.dumps(self.status))
+
             time.sleep(INTERVAL)
 
     def check_kafka(self):
         status = list()
-        # Check each service
+        # Check each service, zookeeper and kafka if it is available and gathers the same output
+        # Send notif only when the service is not reachable twice
         # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
-        services = os.popen("/kafka/bin/kafka-topics.sh --zookeeper {}:2181 --list".format(SWARM_MAN_IP)).readlines()
-        if "dtz.logging\n" not in services:
-            status.append({"service": "kafka", "status": "Topic 'dtz.logging' not found"})
-        if "dtz.sensorthings\n" not in services:
-            status.append({"service": "kafka", "status": "Topic 'dtz.sensorthings' not found"})
+        avail_topics = "@init"
+        for k, v in self.service_status.items():
+            if "zookeeper 192.168.48.7" in k:
+                ret = os.popen("/kafka/bin/kafka-topics.sh --{} --list".format(
+                    k)).readlines()
+                if avail_topics == "@init":
+                    avail_topics = ret
+                if ret == "":
+                    status.append({"service": k, "status": "no topics found"})
+                else:
+                    if avail_topics != ret:
+                        if self.service_status[k] == True:
+                            self.service_status[k] = False
+                        else:
+                            status.append({"service": k, "status": "topics don't match: {}".format(ret)})
+            if "kafka 192.168.48.7" in k:
+                ret = os.popen("/kafka/bin/kafka-topics.sh --bootstrap-server {} --list".format(
+                    k.split(" ")[-1])).readlines()
+                if avail_topics == "@init":
+                    avail_topics = ret
+                if ret == "":
+                    status.append({"service": k, "status": "no topics found"})
+                else:
+                    if avail_topics != ret:
+                        if self.service_status[k] == True:
+                            self.service_status[k] = False
+                        else:
+                            status.append({"service": k, "status": "topics don't match: {}".format(ret)})
         return status
 
-    def check_datastack(self):
+    def check_docker_services(self):
         status = list()
         # Check each service
-        # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
-        services = os.popen("docker service ls | grep stack_").readlines()
-        if len(services) != 5:
-            status.append({"service": "datastack", "status": "Number of services is not 5.", "services": services})
-        for service in services:
-            fields = [s for s in service.split(" ") if s != ""]
-            id_ser = fields[0]
-            name = fields[1]
-            replicas = fields[3]
-            image = fields[4]
-            rep1, rep2 = replicas.split("/")
-            if rep1 != rep2:
-                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
-                               "IMAGE": image})
-        return status
+        print("checking docker")
+        services = os.popen("docker service ls").readlines()
+        print("found services: \n{}".format(services))
 
-    def check_sensorthings(self):
-        status = list()
-        # Check each service
-        services = os.popen("docker service ls | grep st_").readlines()
-        if len(services) != 3:
-            status.append({"service": "sensorthings", "status": "Number of services is not 3.", "services": services})
-        for service in services:
-            fields = [s for s in service.split(" ") if s != ""]
-            id_ser = fields[0]
-            name = fields[1]
-            replicas = fields[3]
-            image = fields[4]
-            rep1, rep2 = replicas.split("/")
-            if rep1 != rep2:
-                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
-                               "IMAGE": image})
+        for k, v in self.service_status.items():
+            if "zookeeper 192.168.48.7" in k or "kafka 192.168.48.7" in k or k == "meta watchdog":
+                continue
 
-        # Check connection:
-        req = requests.get(url="http://{}:8084".format(SWARM_MAN_IP))
-        if req.status_code != 200:
-            status.append({"service": "sensorthings", "status": "Service on port 8084 not reachable"})
+            found = False
+            for service in services:
+                # Service is available, check if it is replicated correctly
+                if k == service.split()[1]:
+                    reps = service.split()[3]
+                    if int(reps.split("/")[0]) != int(reps.split("/")[1]):
+                        if self.service_status[k] == True:
+                            self.service_status[k] = False
+                        else:
+                            status.append({"service": k, "status": "replicas do not matched {}".format(service)})
+                    found = True
+            if not found:
+                status.append({"service": k, "status": "service was not found in swarm"})
 
-        return status
-
-    def check_operator_dashboard(self):
-        status = list()
-        # Check each service
-        services = os.popen("docker service ls | grep op_").readlines()
-        if len(services) != 2:
-            status.append({"service": "operator dashboard", "status": "Number of services is not 2.", "services": services})
-        for service in services:
-            fields = [s for s in service.split(" ") if s != ""]
-            id_ser = fields[0]
-            name = fields[1]
-            replicas = fields[3]
-            image = fields[4]
-            rep1, rep2 = replicas.split("/")
-            if rep1 != rep2:
-                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
-                               "IMAGE": image})
-
-        # Check connection:
-        req = requests.get(url="http://{}:6789".format(SWARM_MAN_IP))
-        if req.status_code != 200:
-            status.append({"service": "operator dashboard", "status": "Service on port 6789 not reachable"})
-        return status
-
-    def check_mqtt_broker(self):
-        status = list()
-        # Check each service
-        services = os.popen("docker service ls | grep mqtt_mqtt-broker").readlines()
-        if len(services) != 1:
-            status.append({"service": "mqtt broker", "status": "Number of services is not 1.", "services": services})
-        for service in services:
-            fields = [s for s in service.split(" ") if s != ""]
-            id_ser = fields[0]
-            name = fields[1]
-            replicas = fields[3]
-            image = fields[4]
-            rep1, rep2 = replicas.split("/")
-            if rep1 != rep2:
-                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
-                               "IMAGE": image})
-        return status
-
-    def check_mqtt_adapter(self):
-        status = list()
-        # Check each service
-        services = os.popen("docker service ls | grep add-mqtt_").readlines()
-        if len(services) != 1:
-            status.append({"service": "mqtt adapter", "status": "Number of services is not 1.", "services": services})
-        for service in services:
-            fields = [s for s in service.split(" ") if s != ""]
-            id_ser = fields[0]
-            name = fields[1]
-            replicas = fields[3]
-            image = fields[4]
-            rep1, rep2 = replicas.split("/")
-            if rep1 != rep2:
-                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
-                               "IMAGE": image})
-        return status
-
-    def check_db_adapter(self):
-        status = list()
-        # Check each service
-        services = os.popen("docker service ls | grep db-adapter_").readlines()
-        if len(services) != 2:
-            status.append({"service": "db adapter", "status": "Number of services is not 2.", "services": services})
-        for service in services:
-            fields = [s for s in service.split(" ") if s != ""]
-            id_ser = fields[0]
-            name = fields[1]
-            replicas = fields[3]
-            image = fields[4]
-            rep1, rep2 = replicas.split("/")
-            if rep1 != rep2:
-                status.append({"service": name, "ID": id_ser, "REPLICAS": replicas,
-                               "IMAGE": image})
-        # Check connection:
-        req = requests.get(url="http://{}:3030".format(SWARM_MAN_IP))
-        if req.status_code != 200:
-            status.append({"service": "db-adapter status", "status": "Service on port 3030 not reachable"})
-        elif req.json()["status"] != "running":
-            status.append({"service": "db-adapter status", "status": req.json()["status"]})
         return status
 
     def check_meta_watchdog(self):
@@ -239,29 +215,36 @@ class Watchdog:
         try:
             req = requests.get(url="http://{}:8081".format(META_WATCHDOG_URL))
             if req.status_code != 200:
-                return [{"service": "meta watchdog", "status": "Service on {}:8081 not reachable".format(META_WATCHDOG_URL)}]
+                if self.service_status["meta watchdog"] == True:
+                    self.service_status["meta watchdog"] = False
+                else:
+                    return [{"service": "meta watchdog",
+                             "status": "Service on {}:8081 not reachable".format(META_WATCHDOG_URL)}]
         except requests.exceptions.ConnectionError:
-            return [
-                {"service": "meta watchdog", "status": "Service on {}:8081 not reachable".format(META_WATCHDOG_URL)}]
+            if self.service_status["meta watchdog"] == True:
+                self.service_status["meta watchdog"] = False
+            else:
+                return [{"service": "meta watchdog",
+                         "status": "Service on {}:8081 not reachable".format(META_WATCHDOG_URL)}]
         return list()
 
-
-    def slack_notify(self,counter, attachments):
+    def slack_notify(self, counter, attachments):
         if counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
-            if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # true on cluster node il081
+            if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # true on cluster node il071
                 self.slack.notify(attachments=attachments)
+                pass
             else:
                 print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
             counter = 0
         else:
+            print("increasing counter")
             counter += INTERVAL
         return counter
 
 
 if __name__ == '__main__':
     print("Starting cluster-watchdog, initial waiting for some time")
-    # start kafka to logstash streaming in a subprocess
     watchdog_instance = Watchdog()
     watchdog_routine = Process(target=Watchdog.start, args=(watchdog_instance,))
     watchdog_routine.start()

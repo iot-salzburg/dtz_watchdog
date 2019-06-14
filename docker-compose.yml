@@ -1,0 +1,31 @@
+version: '3.4'
+
+services:
+  adapter:
+    image: 127.0.0.1:5001/src
+    build: src/
+    environment:
+      # Watchdog config
+      META_WATCHDOG_URL: "192.168.48.50"
+      SWARM_MAN_IP: "192.168.48.71"
+      # Panta Rhei configuration
+      CLIENT_NAME: "watchdog"
+      SYSTEM_NAME: "test-topic"
+      # "at.srfg.iot.dtz"
+      SENSORTHINGS_HOST: "192.168.48.71:8082"
+      BOOTSTRAP_SERVERS: "192.168.48.71:9092,192.168.48.72:9092,192.168.48.73:9092,192.168.48.74:9092,192.168.48.75:9092"
+    env_file:
+      - .env
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: "1"
+          memory: 4G
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure

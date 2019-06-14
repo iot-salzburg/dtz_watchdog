@@ -2,4 +2,3 @@ flask
 redis
 requests
 slackweb
-# python-logstash
