@@ -13,13 +13,15 @@ via Slack. Additionally, a second watchdog watches the main one.
 
 ## Requirements
 
+Clone the repository and set the environment:
+
 ```bash
 git clone https://github.com/iot-salzburg/dtz_watchdog.git
 cd dtz_watchdog
-pip3 install -r requirements.txt
+virtualenv -p $(which python3) setup/venv
+source setup/venv/bin/activate
+python -m pip install -r requirements.txt
 ```
-
-
 
 ## Usage
 
@@ -29,13 +31,14 @@ The Watchdog uses a slack webhook to notify about cluster issues. Therefore open
 look for `Incoming WebHooks`, `Add Configuration` and select the desired Slack Channel. Then a new configuration will
 show the WebHook-Url in the form: `https://hooks.slack.com/services/id1/id2/id3`. This URL should be set as
 environment variable on the host. Note that the **url is in quotes**, so that
-it can be accessed better within python.
+it can be accessed better within python. Additonally set the ip-address and hostname of the cluster watchdog, and also the ip-address of the meta watchdog.
 
 ```bash
-export SLACK_URL="https://hooks.slack.com/services/id1/id2/id3"
-export SWARM_MAN_IP="192.168.48.81"
-export META_WATCHDOG_URL="192.168.48.50"
-echo $SLACK_URL
+echo "SLACK_URL=https://hooks.slack.com/services/id1/id2/id3" >> .env
+echo "CLUSTER_WATCHDOG_HOSTNAME=il071" >> .env
+echo "SWARM_MAN_IP=192.168.48.71" >> .env
+echo "META_WATCHDOG_URL=192.168.48.50" >> .env
+cat .env
 ```
 
 Now, the Watchdog can be started.
@@ -46,40 +49,22 @@ python3 src/meta-watchdog.py
 ```
 
 
-View if the cluster is healthy in the [browser](http://il081:8081/).
-
+View if the cluster is healthy in the [browser](http://il071:8081/).
 
 
 ### Deployment
 
-Create a service with `systemd`:
+Adjust the settings and copy the systemd service:
 ```
-sudo nano /etc/systemd/system/cluster-watchdog.service
+sudo nano setup/watchdog.service
+sudo cp setup/watchdog.service /etc/systemd/system/watchdog.service
 ```
-With the content:
-```
-[Unit]
-Description=Autostart DTZ Watchdog
-After=network.target
 
-[Service]
-User=iotdev
-Group=iotdev
-Environment=SLACK_URL=https://hooks.slack.com/services/id1/id2/id3
-Environment=SWARM_MAN_IP=192.168.48.81
-Environment=META_WATCHDOG_URL=192.168.48.50
-WorkingDirectory=/srv/dtz_watchdog/
-ExecStart=/srv/dtz_watchdog/src/cluster-watchdog.py
-ExecReload=/bin/kill -HUP $MAINPID
-
-[Install]
-WantedBy=multi-user.target
+An execute to enable:
 ```
-An run to enable:
-```
-sudo systemctl enable cluster-watchdog.service
-sudo systemctl start cluster-watchdog
-sudo systemctl status cluster-watchdog
+sudo systemctl enable watchdog.service
+sudo systemctl start watchdog
+sudo systemctl status watchdog
 ```
 
 
@@ -104,7 +89,7 @@ After=network.target
 User=iotdev
 Group=iotdev
 Environment=SLACK_URL=https://hooks.slack.com/services/id1/id2/id3
-Environment=SWARM_MAN_IP=192.168.48.81
+Environment=SWARM_MAN_IP=192.168.48.71
 Environment=META_WATCHDOG_URL=192.168.48.50
 WorkingDirectory=/srv/dtz_watchdog/
 ExecStart=/srv/dtz_watchdog/src/meta-watchdog.py
