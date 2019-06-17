@@ -6,3 +6,4 @@ requests==2.9.1
 slackweb==1.0.5
 Werkzeug==0.15.4
 python-dotenv==0.10.3
+pytz==2019.1

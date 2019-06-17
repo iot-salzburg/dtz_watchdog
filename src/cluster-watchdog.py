@@ -7,13 +7,15 @@ import socket
 import logging
 import requests
 import slackweb
+import pytz
+from datetime import datetime
 from redis import Redis
 from flask import Flask, jsonify
 from dotenv import load_dotenv
 from multiprocessing import Process
 
 __date__ = "14 Juni 2019"
-__version__ = "1.2"
+__version__ = "1.3"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
 __desc__ = """This program watches the state of each service, part of the DTZ system on the il07X cluster.
@@ -75,7 +77,6 @@ services = [
     "mqtt_mqtt-broker",
     "registry",
     "visualizer_visualizer",
-
     "meta watchdog"
 ]
 
@@ -95,7 +96,7 @@ def print_cluster_status():
             status = json.loads(f.read())
     except FileNotFoundError:
         status = {"application": "dtz_cluster-watchdog",
-                  "status": "running"}
+                  "status": "FileNotFoundError"}
     return jsonify(status)
 
 
@@ -109,7 +110,9 @@ class Watchdog:
                                                       "CLUSTER_WATCHDOG_HOSTNAME": CLUSTER_WATCHDOG_HOSTNAME},
                             "version": {"number": __version__,
                                         "build_date": __date__,
-                                        "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
+                            "status": "initialisation",
+                            "last check": datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat(),
+                            "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
 
         self.slack = slackweb.Slack(url=SLACK_URL)  # os.environ.get('SLACK_URL'))
@@ -118,8 +121,8 @@ class Watchdog:
             f.write(json.dumps(self.status))
 
         if socket.gethostname() == CLUSTER_WATCHDOG_HOSTNAME:  # If this is run by the host.
-            self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
-            pass
+            print('Started Cluster watchdog. Status reachable at {}'.format("http://" + SWARM_MAN_IP))
+            self.slack.notify(text='Started Cluster watchdog. Status reachable at {}'.format("http://" + SWARM_MAN_IP))
 
     def start(self):
         """
@@ -147,6 +150,8 @@ class Watchdog:
                     {'title': 'Datastack Warning', 'text': str(json.dumps(status, indent=4)), 'color': 'warning'}])
                 #c = self.slack_notify(c,
                 #                  attachments=[{'title': 'Datastack Warning', 'text': str(status), 'color': 'warning'}])
+            self.status["last check"] = datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat()
+
             with open(STATUS_FILE, "w") as f:
                 f.write(json.dumps(self.status))
 
@@ -255,4 +260,4 @@ if __name__ == '__main__':
     watchdog_routine = Process(target=Watchdog.start, args=(watchdog_instance,))
     watchdog_routine.start()
 
-    app.run(host="0.0.0.0", debug=False, port=8081)
+    app.run(host="0.0.0.0", debug=False, port=port)
