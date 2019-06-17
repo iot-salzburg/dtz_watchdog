@@ -42,6 +42,7 @@ The following services will be watched:
 # Configuration
 STATUS_FILE = "status.log"
 load_dotenv()
+PORT = 8081
 SLACK_URL = os.environ.get('SLACK_URL', "")
 if SLACK_URL == "":
     print("No Slack URL found")
@@ -260,4 +261,4 @@ if __name__ == '__main__':
     watchdog_routine = Process(target=Watchdog.start, args=(watchdog_instance,))
     watchdog_routine.start()
 
-    app.run(host="0.0.0.0", debug=False, port=port)
+    app.run(host="0.0.0.0", debug=False, port=PORT)
