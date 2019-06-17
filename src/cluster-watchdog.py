@@ -9,6 +9,7 @@ import requests
 import slackweb
 from redis import Redis
 from flask import Flask, jsonify
+from dotenv import load_dotenv
 from multiprocessing import Process
 
 __date__ = "14 Juni 2019"
@@ -38,14 +39,16 @@ The following services will be watched:
 
 # Configuration
 STATUS_FILE = "status.log"
+load_dotenv()
 SLACK_URL = os.environ.get('SLACK_URL', "")
 if SLACK_URL == "":
     print("No Slack URL found")
 META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
 SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.71")
-INTERVAL = 60  # in seconds
-STARTUP_TIME = 0  # 120  # for other services
-REACTION_TIME = 2 * 60  # Timeout in order to not notify when rebooting
+CLUSTER_WATCHDOG_HOSTNAME = os.environ.get('CLUSTER_WATCHDOG_HOSTNAME', "il071")
+INTERVAL = 60  # in seconds, for checking
+STARTUP_TIME = 10  # 120  # for other services
+REACTION_TIME = 5 * 60  # Timeout in order to not notify when rebooting, or service scaling
 NOTIFY_TIME = 60 * 60
 
 services = [
@@ -102,7 +105,8 @@ class Watchdog:
                             "status": "initialisation",
                             "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP,
                                                       "META_WATCHDOG_URL": META_WATCHDOG_URL,
-                                                      "SLACK_URL": SLACK_URL[:33] + "..."},
+                                                      "SLACK_URL": SLACK_URL[:33] + "...",
+                                                      "CLUSTER_WATCHDOG_HOSTNAME": CLUSTER_WATCHDOG_HOSTNAME},
                             "version": {"number": __version__,
                                         "build_date": __date__,
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
@@ -113,8 +117,8 @@ class Watchdog:
         with open(STATUS_FILE, "w") as f:
             f.write(json.dumps(self.status))
 
-        if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # If this is run by the host.
-            # self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
+        if socket.gethostname() == CLUSTER_WATCHDOG_HOSTNAME:  # If this is run by the host.
+            self.slack.notify(text='Started Cluster watchdog on host {}'.format(socket.gethostname()))
             pass
 
     def start(self):
@@ -139,10 +143,10 @@ class Watchdog:
                 c = NOTIFY_TIME
             else:
                 self.status["cluster status"] = status
-                self.slack_notify(c, attachments=[
+                c = self.slack_notify(c, attachments=[
                     {'title': 'Datastack Warning', 'text': str(json.dumps(status, indent=4)), 'color': 'warning'}])
-                self.slack_notify(c,
-                                  attachments=[{'title': 'Datastack Warning', 'text': str(status), 'color': 'warning'}])
+                #c = self.slack_notify(c,
+                #                  attachments=[{'title': 'Datastack Warning', 'text': str(status), 'color': 'warning'}])
             with open(STATUS_FILE, "w") as f:
                 f.write(json.dumps(self.status))
 
@@ -188,7 +192,9 @@ class Watchdog:
         # Check each service
         print("checking docker")
         services = os.popen("docker service ls").readlines()
-        print("found services: \n{}".format(services))
+        print("Found docker services:")
+        for service in services:
+            print(service)
 
         for k, v in self.service_status.items():
             if "zookeeper 192.168.48.7" in k or "kafka 192.168.48.7" in k or k == "meta watchdog":
@@ -199,11 +205,11 @@ class Watchdog:
                 # Service is available, check if it is replicated correctly
                 if k == service.split()[1]:
                     reps = service.split()[3]
-                    if int(reps.split("/")[0]) != int(reps.split("/")[1]):
+                    if (int(reps.split("/")[0]) != int(reps.split("/")[1])) or (int(reps.split("/")[0]) == 0):
                         if self.service_status[k] == True:
                             self.service_status[k] = False
                         else:
-                            status.append({"service": k, "status": "replicas do not matched {}".format(service)})
+                            status.append({"service": k, "status": "replicas do not match or is 0: {}".format(service)})
                     found = True
             if not found:
                 status.append({"service": k, "status": "service was not found in swarm"})
@@ -231,15 +237,15 @@ class Watchdog:
     def slack_notify(self, counter, attachments):
         if counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
-            if socket.gethostname().startswith(SWARM_MAN_IP[:4]):  # true on cluster node il071
+            if socket.gethostname() == CLUSTER_WATCHDOG_HOSTNAME:  # true on cluster node il071
+                print("sending notification to slack")
                 self.slack.notify(attachments=attachments)
-                pass
             else:
                 print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
             counter = 0
         else:
-            print("increasing counter")
             counter += INTERVAL
+            print("Anomaly detected, but notify time of {} s not reached, increasing counter to {} s".format(NOTIFY_TIME + REACTION_TIME, counter))
         return counter
 
 
