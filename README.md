@@ -55,7 +55,9 @@ View if the cluster is healthy [http://il071:8081/](http://192.168.48.71:8081/).
 
 ### Deployment
 
-Adjust the settings and copy the systemd service:
+Adjust the settings like user name and absolute path to the repository 
+and copy the systemd service into the proper directory:
+
 ```
 sudo nano setup/watchdog.service
 sudo cp setup/watchdog.service /etc/systemd/system/watchdog.service
@@ -74,34 +76,22 @@ sudo systemctl status watchdog
 As there would be no notifications if the host server itself crashes,
 we deploy a meta watchdog, that watches only on the cluster watchdog.
 
-Therefore, Select on another host:
+Therefore, adjust the settings like user name and absolute path to the repository 
+and copy the systemd service into the proper directory:
 
-Create a service with `systemd`:
 ```
-sudo nano /etc/systemd/system/meta-watchdog.service
+sudo nano setup/meta-watchdog.service
+sudo cp setup/meta-watchdog.service /etc/systemd/system/meta-watchdog.service
 ```
-With the content:
-```
-[Unit]
-Description=Autostart DTZ Meta Watchdog
-After=network.target
 
-[Service]
-User=iotdev
-Group=iotdev
-Environment=SLACK_URL=https://hooks.slack.com/services/id1/id2/id3
-Environment=SWARM_MAN_IP=192.168.48.71
-Environment=META_WATCHDOG_URL=192.168.48.50
-WorkingDirectory=/srv/dtz_watchdog/
-ExecStart=/srv/dtz_watchdog/src/meta-watchdog.py
-ExecReload=/bin/kill -HUP $MAINPID
-
-[Install]
-WantedBy=multi-user.target
-```
-An run to enable:
+An execute to enable:
 ```
 sudo systemctl enable meta-watchdog.service
 sudo systemctl start meta-watchdog
 sudo systemctl status meta-watchdog
 ```
+
+Both watchdogs should now be up and running:
+
+* [cluster-watchdog](http://192.168.48.71:8081/)
+* [meta-watchdog](http://192.168.48.50:8081/)
