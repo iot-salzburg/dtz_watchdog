@@ -6,24 +6,33 @@ import time
 import socket
 import requests
 import slackweb
+import pytz
+from datetime import datetime
 from redis import Redis
 from flask import Flask, jsonify
+from dotenv import load_dotenv
 from multiprocessing import Process
 
 
-__date__ = "14 Juni 2019"
-__version__ = "1.1"
+__date__ = "16 Juni 2019"
+__version__ = "1.3"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
 __desc__ = """This program watches the state of the cluster-watchdog, part of the DTZ system on the il07X cluster."""
 
 
-STATUS_FILE = "meta_status.log"
-SLACK_URL =  os.environ.get('SLACK_URL')
-
 # Configuration:
-# print(os.environ.get('SWARM_MAN_IP'))
+STATUS_FILE = "meta_status.log"
+load_dotenv()
+SLACK_URL = os.environ.get('SLACK_URL', "")
+if SLACK_URL == "":
+    print("No Slack URL found")
+PORT = os.environ.get('PORT', "8081")
+META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
 SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.71")
+CLUSTER_WATCHDOG_HOSTNAME = os.environ.get('CLUSTER_WATCHDOG_HOSTNAME', "il071")
+
+# Set timeouts
 INTERVAL = 20  # in seconds
 STARTUP_TIME = 0  # for other services
 REACTION_TIME = 2*60  # Timeout in order to not notify when rebooting
@@ -53,8 +62,15 @@ class Watchdog:
     def __init__(self):
         self.status = dict({"application": "dtz_meta-watchdog",
                             "status": "initialisation",
-                            "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP, "SLACK_URL": SLACK_URL[:33]+"..."},
-                            "version": {"number": __version__, "build_date": __date__,
+                            "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP,
+                                                      "META_WATCHDOG_URL": META_WATCHDOG_URL,
+                                                      "SLACK_URL": SLACK_URL[:33] + "...",
+                                                      "CLUSTER_WATCHDOG_HOSTNAME": CLUSTER_WATCHDOG_HOSTNAME,
+                                                      "PORT": PORT},
+                            "version": {"number": __version__,
+                                        "build_date": __date__,
+                                        "status": "initialisation",
+                                        "last check": datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat(),
                                         "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
         self.slack = slackweb.Slack(url=SLACK_URL)  # os.environ.get('SLACK_URL'))

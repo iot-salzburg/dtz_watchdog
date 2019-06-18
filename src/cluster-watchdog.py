@@ -14,7 +14,7 @@ from flask import Flask, jsonify
 from dotenv import load_dotenv
 from multiprocessing import Process
 
-__date__ = "14 Juni 2019"
+__date__ = "16 Juni 2019"
 __version__ = "1.3"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
@@ -42,17 +42,19 @@ The following services will be watched:
 # Configuration
 STATUS_FILE = "status.log"
 load_dotenv()
-PORT = 8081
 SLACK_URL = os.environ.get('SLACK_URL', "")
 if SLACK_URL == "":
     print("No Slack URL found")
+PORT = os.environ.get('PORT', "8081")
 META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
 SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.71")
 CLUSTER_WATCHDOG_HOSTNAME = os.environ.get('CLUSTER_WATCHDOG_HOSTNAME', "il071")
-INTERVAL = 60  # in seconds, for checking
-STARTUP_TIME = 10  # 120  # for other services
+
+# Set timeouts
+INTERVAL = 60  # check frequency
+STARTUP_TIME = 10  # 120  # Wait timeout for other services
 REACTION_TIME = 5 * 60  # Timeout in order to not notify when rebooting, or service scaling
-NOTIFY_TIME = 60 * 60
+NOTIFY_TIME = 60 * 60  # Time intervall for resending a notification
 
 services = [
     "zookeeper 192.168.48.71:2181",
@@ -108,32 +110,36 @@ class Watchdog:
                             "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP,
                                                       "META_WATCHDOG_URL": META_WATCHDOG_URL,
                                                       "SLACK_URL": SLACK_URL[:33] + "...",
-                                                      "CLUSTER_WATCHDOG_HOSTNAME": CLUSTER_WATCHDOG_HOSTNAME},
+                                                      "CLUSTER_WATCHDOG_HOSTNAME": CLUSTER_WATCHDOG_HOSTNAME,
+                                                      "PORT": PORT},
                             "version": {"number": __version__,
                                         "build_date": __date__,
-                            "status": "initialisation",
-                            "last check": datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat(),
-                            "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
+                                        "status": "initialisation",
+                                        "last check": datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat(),
+                                        "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
                             "cluster status": None})
 
         self.slack = slackweb.Slack(url=SLACK_URL)  # os.environ.get('SLACK_URL'))
+        self.counter = None
         # If that fails, examine if the env variable is set correctly.
         with open(STATUS_FILE, "w") as f:
             f.write(json.dumps(self.status))
 
+        print('Started Cluster watchdog. Status reachable at {}'.format("http://" + SWARM_MAN_IP + ":" + PORT))
         if socket.gethostname() == CLUSTER_WATCHDOG_HOSTNAME:  # If this is run by the host.
-            print('Started Cluster watchdog. Status reachable at {}'.format("http://" + SWARM_MAN_IP))
-            self.slack.notify(text='Started Cluster watchdog. Status reachable at {}'.format("http://" + SWARM_MAN_IP))
+            self.slack.notify(text='Started Cluster watchdog. Status reachable at {}'
+                              .format("http://" + SWARM_MAN_IP + ":" + PORT))
 
     def start(self):
         """
-        Runs periodically healthchecks for each service and notifies via slack.
+        Runs periodically health-checks for each service and notifies via slack.
         :return:
         """
         time.sleep(STARTUP_TIME)  # Give the other services time when rebooting.
 
         self.status["status"] = "running"
-        c = NOTIFY_TIME
+        self.counter = NOTIFY_TIME
+        # Set the status of each service to True
         self.service_status = {k: True for k in services}
 
         while True:
@@ -144,13 +150,11 @@ class Watchdog:
 
             if status == list():
                 self.status["cluster status"] = "healthy"
-                c = NOTIFY_TIME
+                self.counter = NOTIFY_TIME
             else:
                 self.status["cluster status"] = status
-                c = self.slack_notify(c, attachments=[
+                self.slack_notify(attachments=[
                     {'title': 'Datastack Warning', 'text': str(json.dumps(status, indent=4)), 'color': 'warning'}])
-                #c = self.slack_notify(c,
-                #                  attachments=[{'title': 'Datastack Warning', 'text': str(status), 'color': 'warning'}])
             self.status["last check"] = datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat()
 
             with open(STATUS_FILE, "w") as f:
@@ -159,10 +163,12 @@ class Watchdog:
             time.sleep(INTERVAL)
 
     def check_kafka(self):
+        """
+        Checks each zookeeper and kafka instance on the cluster
+        :return: list of warnings if the same service is unavailable or not updated twice
+        """
         status = list()
         # Check each service, zookeeper and kafka if it is available and gathers the same output
-        # Send notif only when the service is not reachable twice
-        # services = ["stack_elasticsearch", "stack_logstash", "stack_kibana", "stack_grafana", "stack_jupyter"]
         avail_topics = "@init"
         for k, v in self.service_status.items():
             if "zookeeper 192.168.48.7" in k:
@@ -194,13 +200,14 @@ class Watchdog:
         return status
 
     def check_docker_services(self):
+        """
+        Checks each docker service on the swarm manager (this node)
+        :return: list of warnings if the same error occurs twice
+        """
         status = list()
         # Check each service
-        print("checking docker")
         services = os.popen("docker service ls").readlines()
-        print("Found docker services:")
-        for service in services:
-            print(service)
+        print("Found {} docker services.".format(len(services)))
 
         for k, v in self.service_status.items():
             if "zookeeper 192.168.48.7" in k or "kafka 192.168.48.7" in k or k == "meta watchdog":
@@ -219,13 +226,15 @@ class Watchdog:
                     found = True
             if not found:
                 status.append({"service": k, "status": "service was not found in swarm"})
-
         return status
 
     def check_meta_watchdog(self):
-        # Check connection:
+        """
+        Checks if the meta watchdog on META_WATCHDOG_URL is running
+        :return: a warning is appended if the same error occurs twice
+        """
         try:
-            req = requests.get(url="http://{}:8081".format(META_WATCHDOG_URL))
+            req = requests.get(url="http://{}:{}".format(META_WATCHDOG_URL, PORT))
             if req.status_code != 200:
                 if self.service_status["meta watchdog"] == True:
                     self.service_status["meta watchdog"] = False
@@ -240,25 +249,33 @@ class Watchdog:
                          "status": "Service on {}:8081 not reachable".format(META_WATCHDOG_URL)}]
         return list()
 
-    def slack_notify(self, counter, attachments):
-        if counter >= NOTIFY_TIME + REACTION_TIME:
+    def slack_notify(self, attachments):
+        """
+        Sends notification to slack, but waits for REACTION_TIME and then sends only every NOTIFY_TIME
+        :param attachments: message to send
+        :return:
+        """
+        if self.counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
             if socket.gethostname() == CLUSTER_WATCHDOG_HOSTNAME:  # true on cluster node il071
                 print("sending notification to slack")
                 self.slack.notify(attachments=attachments)
             else:
                 print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
-            counter = 0
+            self.counter = 0
         else:
-            counter += INTERVAL
-            print("Anomaly detected, but notify time of {} s not reached, increasing counter to {} s".format(NOTIFY_TIME + REACTION_TIME, counter))
-        return counter
+            self.counter += INTERVAL
+            print("Anomaly detected, but notify time of {} s not reached, increasing counter to {} s".format(
+                NOTIFY_TIME + REACTION_TIME, self.counter))
 
 
 if __name__ == '__main__':
-    print("Starting cluster-watchdog, initial waiting for some time")
+    print("Starting cluster-watchdog, initializing.")
+
+    # Starting Watchdog Process
     watchdog_instance = Watchdog()
     watchdog_routine = Process(target=Watchdog.start, args=(watchdog_instance,))
     watchdog_routine.start()
 
+    # Starting webservice
     app.run(host="0.0.0.0", debug=False, port=PORT)

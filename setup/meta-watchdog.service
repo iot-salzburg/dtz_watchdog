@@ -1,0 +1,16 @@
+
+[Unit]
+Description=meta-watchdog: checks the main cluster-watchdog
+After=syslog.target network.target
+
+[Service]
+User=cschranz
+Group=cschranz
+WorkingDirectory=/srv/dtz_watchdog/
+ExecStart=/srv/dtz_watchdog/src/meta-watchdog.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
+

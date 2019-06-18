@@ -31,25 +31,26 @@ The Watchdog uses a slack webhook to notify about cluster issues. Therefore open
 look for `Incoming WebHooks`, `Add Configuration` and select the desired Slack Channel. Then a new configuration will
 show the WebHook-Url in the form: `https://hooks.slack.com/services/id1/id2/id3`. This URL should be set as
 environment variable on the host. Note that the **url is in quotes**, so that
-it can be accessed better within python. Additonally set the ip-address and hostname of the cluster watchdog, and also the ip-address of the meta watchdog.
+it can be accessed better within python. Additionally set the ip-address and hostname of the cluster watchdog, and also the ip-address of the meta watchdog.
 
 ```bash
 echo "SLACK_URL=https://hooks.slack.com/services/id1/id2/id3" >> .env
 echo "CLUSTER_WATCHDOG_HOSTNAME=il071" >> .env
 echo "SWARM_MAN_IP=192.168.48.71" >> .env
 echo "META_WATCHDOG_URL=192.168.48.50" >> .env
+echo "PORT=8081" >> .env
 cat .env
 ```
 
-Now, the Watchdog can be started.
+Now, the Watchdogs can be started.
 
 ```bash
-python3 src/cluster-watchdog.py
-python3 src/meta-watchdog.py
+user@il071:dtz_watchdog$ python3 src/cluster-watchdog.py
+user@il050:dtz_watchdog$ python3 src/meta-watchdog.py
 ```
 
 
-View if the cluster is healthy in the [browser](http://il071:8081/).
+View if the cluster is healthy [http://il071:8081/](http://192.168.48.71:8081/).
 
 
 ### Deployment
