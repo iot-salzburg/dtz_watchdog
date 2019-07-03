@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 from multiprocessing import Process
 
 
-__date__ = "16 Juni 2019"
-__version__ = "1.3"
+__date__ = "03 July 2019"
+__version__ = "1.4"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"
 __desc__ = """This program watches the state of the cluster-watchdog, part of the DTZ system on the il07X cluster."""
@@ -62,23 +62,24 @@ class Watchdog:
     def __init__(self):
         self.status = dict({"application": "dtz_meta-watchdog",
                             "status": "initialisation",
-                            "environment variables": {"SWARM_MAN_IP": SWARM_MAN_IP,
-                                                      "META_WATCHDOG_URL": META_WATCHDOG_URL,
+                            "environment_variables": {"cluster_watchdog_url": "http://" + SWARM_MAN_IP + ":" + PORT,
+                                                      "meta_watchdog_url": "http://" + META_WATCHDOG_URL + ":" + PORT,
                                                       "SLACK_URL": SLACK_URL[:33] + "...",
-                                                      "CLUSTER_WATCHDOG_HOSTNAME": CLUSTER_WATCHDOG_HOSTNAME,
-                                                      "PORT": PORT},
+                                                      "cluster_watchdog_hostname": CLUSTER_WATCHDOG_HOSTNAME},
                             "version": {"number": __version__,
                                         "build_date": __date__,
                                         "status": "initialisation",
-                                        "last check": datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat(),
-                                        "repository": "https://github.com/iot-salzburg/dtz-watchdog"},
-                            "cluster status": None})
+                                        "last_init": datetime.utcnow().replace(tzinfo=pytz.UTC).replace(microsecond=0).isoformat(),
+                                        "repository": "https://github.com/iot-salzburg/dtz_watchdog"},
+                            "cluster_status": None,
+                            "monitored_services": "cluster-watchdog"})
         self.slack = slackweb.Slack(url=SLACK_URL)  # os.environ.get('SLACK_URL'))
         # If that fails, examine if the env variable is set correctly.
         with open(STATUS_FILE, "w") as f:
             f.write(json.dumps(self.status))
         # print(os.environ.get('SLACK_URL'))
-        self.slack.notify(text='Started meta-watchdog on host {}'.format(socket.gethostname()))
+        self.slack.notify(text='Started meta-watchdog on {}, infos available at {}'.format(
+            META_WATCHDOG_URL, "http://" + META_WATCHDOG_URL + ":" + PORT))
 
     def start(self):
         """
@@ -94,10 +95,10 @@ class Watchdog:
             status = self.check_cluster_watchdog()
 
             if status == list():
-                self.status["cluster status"] = "healthy"
+                self.status["cluster_status"] = "healthy"
                 c = NOTIFY_TIME
             else:
-                self.status["cluster status"] = status
+                self.status["cluster_status"] = status
                 c = self.slack_notify(c, attachments=[{'title': 'Meta-Watchdog Warning',
                                                        'text': str(json.dumps(status, indent=4)),
                                                        'color': 'warning'}])
@@ -110,15 +111,18 @@ class Watchdog:
         try:
             req = requests.get(url="http://{}:8081".format(SWARM_MAN_IP))
             if req.status_code != 200:
-                return [{"service": "cluster watchdog", "status": "Service on port 8081 not reachable"}]
+                return [{"service": "cluster watchdog",
+                         "status": "Cluster Watchdog at http://{}:{} is not reachable. More infos at {}.".format(
+                             SWARM_MAN_IP, PORT, "http://" + META_WATCHDOG_URL + ":" + PORT)}]
         except requests.exceptions.ConnectionError:
-            return [{"service": "cluster watchdog", "status": "Service on port 8081 not reachable"}]
+            return [{"service": "cluster watchdog",
+                     "status": "Cluster Watchdog at http://{}:{} is not reachable. More infos at {}.".format(
+                         SWARM_MAN_IP, PORT, "http://" + META_WATCHDOG_URL + ":" + PORT)}]
         return list()
 
     def slack_notify(self, counter, attachments):
         if counter >= NOTIFY_TIME + REACTION_TIME:
             # self.slack.notify(text="Testing messenger")
-            print(str(json.dumps({"Development mode, attachments": attachments}, indent=4, sort_keys=True)))
             self.slack.notify(attachments=attachments)
             counter = 0
         else:
