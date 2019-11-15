@@ -9,7 +9,7 @@ Group=user
 WorkingDirectory=/srv/dtz_watchdog/
 ExecStart=/srv/dtz_watchdog/src/meta-watchdog.py
 ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-abort
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
