@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from multiprocessing import Process
 
 
-__date__ = "03 July 2019"
+__date__ = "10 January 2020"
 __version__ = "1.4"
 __email__ = "christoph.schranz@salzburgresearch.at"
 __status__ = "Development"

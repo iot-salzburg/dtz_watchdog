@@ -57,10 +57,10 @@ REACTION_TIME = 5 * 60  # Timeout in order to not notify when rebooting, or serv
 NOTIFY_TIME = 60 * 60  # Time intervall for resending a notification
 
 services = [
-    "zookeeper: 192.168.48.71:2181",
+#    "zookeeper: 192.168.48.71:2181",
     "zookeeper: 192.168.48.72:2181",
     "zookeeper: 192.168.48.73:2181",
-    "kafka: 192.168.48.71:9092",
+#    "kafka: 192.168.48.71:9092",
     "kafka: 192.168.48.72:9092",
     "kafka: 192.168.48.73:9092",
     "kafka: 192.168.48.74:9092",
@@ -140,7 +140,7 @@ class Watchdog:
         self.status["status"] = "running"
         self.counter = NOTIFY_TIME
         # Set the status of each service to True
-        self.service_status = {k: True for k in services}
+        self.service_status = {k.split(" ")[-1]: True for k in services}
 
         while True:
             status = list()
@@ -242,15 +242,15 @@ class Watchdog:
         try:
             req = requests.get(url="http://{}:{}".format(META_WATCHDOG_URL, PORT))
             if req.status_code != 200:
-                if self.service_status["meta watchdog"] == True:
-                    self.service_status["meta watchdog"] = False
+                if self.service_status["meta_watchdog"] == True:
+                    self.service_status["meta_watchdog"] = False
                 else:
                     return [{"service": "meta watchdog",
                              "status": "Meta Watchdog at http://{}:{} is not reachable. More infos at {}.".format(
                                  META_WATCHDOG_URL, PORT, "http://" + SWARM_MAN_IP + ":" + PORT)}]
         except requests.exceptions.ConnectionError:
-            if self.service_status["meta watchdog"] == True:
-                self.service_status["meta watchdog"] = False
+            if self.service_status["meta_watchdog"] == True:
+                self.service_status["meta_watchdog"] = False
             else:
                 return [{"service": "meta watchdog",
                          "status": "Meta Watchdog at http://{}:{} is not reachable. More infos at {}.".format(
