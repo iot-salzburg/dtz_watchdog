@@ -28,7 +28,7 @@ The following services will be watched:
   - add-opcua_adapter
   - dtz_master_controller_dtz_master_controller
   - elk_elasticsearch
-  - elk_grafana
+  - grafana_grafana
   - elk_kibana
   - elk_logstash
   - gost_dashboard
@@ -70,7 +70,7 @@ services = [
     "docker: add-opcua_adapter",
     "docker: dtz_master_controller_dtz_master_controller",
     "docker: elk_elasticsearch",
-    "docker: elk_grafana",
+    "docker: grafana_grafana",
     "docker: elk_kibana",
     "docker: elk_logstash",
     "docker: gost_dashboard",
