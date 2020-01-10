@@ -29,8 +29,8 @@ if SLACK_URL == "":
     print("No Slack URL found")
 PORT = os.environ.get('PORT', "8081")
 META_WATCHDOG_URL = os.environ.get('META_WATCHDOG_URL', "192.168.48.50")
-SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.71")
-CLUSTER_WATCHDOG_HOSTNAME = os.environ.get('CLUSTER_WATCHDOG_HOSTNAME', "il071")
+SWARM_MAN_IP = os.environ.get('SWARM_MAN_IP', "192.168.48.72")
+CLUSTER_WATCHDOG_HOSTNAME = os.environ.get('CLUSTER_WATCHDOG_HOSTNAME', "il072")
 
 # Set timeouts
 INTERVAL = 20  # in seconds
