@@ -2,7 +2,7 @@ Flask==1.0.3
 itsdangerous==1.1.0
 Jinja2==2.11.3
 redis==4.4.4
-requests==2.20.0
+requests==2.31.0
 slackweb==1.0.5
 Werkzeug==2.2.3
 python-dotenv==0.10.3
